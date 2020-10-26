@@ -1,0 +1,80 @@
+#### Preamble ####
+# Purpose: To download, prepare, and clean data from hansard
+# Author: Add your name
+# Date: 11 October 2020
+# Contact: Add your email address
+
+
+#### Workspace set up ####
+library(rvest)
+library(tidyverse)
+
+
+#### Gather the data ####
+# Get the XML links from here: https://www.aph.gov.au/Parliamentary_Business/Hansard/Hansreps_2011
+# I made a CSV of addresses for the data that we need
+addresses_to_visit <- read_csv("inputs/addresses.csv")
+
+addresses_to_visit <- addresses_to_visit[3:nrow(addresses_to_visit),] # Just used for testing
+# We want to visit each address, download the data from there, save it, and then pause.
+download_save_and_wait <- function(web_address, save_location){
+  hansard <- read_html(web_address) # Go to the website and download the file
+  write_html(hansard, save_location) # Save it
+  message <- paste0("Done with ", save_location, " at ", Sys.time())
+  print(message) # Useful so you know where you're up to
+  Sys.sleep(60) # Wait 60 seconds
+}
+
+# Apply the function (will take a while)
+# COMMENTED TO PREVENT ACCIDENTAL USAGE
+# walk2(addresses_to_visit$address, addresses_to_visit$save_name , download_save_and_wait)
+
+
+#### Parse the data ####
+# Need to go through each of those XML and get the bits where they are talking
+
+hansard <- read_html("https://parlinfo.aph.gov.au/parlInfo/download/chamber/hansardr/7bce5c16-c1b0-43c9-9392-8ff6f8f1352b/toc_unixml/House%20of%20Representatives_2011_05_10_10_Official.xml;fileType=text%2Fxml")
+
+hansard$html
+# HERE
+
+hansard %>%
+  html_nodes("#documentContent") %>%
+  html_text()
+
+# First we use the xml tags to identify the content that we want
+all_speechs <- xml_find_all(hansard, ".//talk.start") %>% xml_text()
+
+
+# Now push it into a tibble
+all <- tibble(raw = all_speechs)
+
+
+
+
+#### Clean the data ####
+# First we need to get rid of the random spaces and regex formatting 
+all <- 
+  all %>% 
+  mutate(clean = str_remove_all(raw, "\\r\\n"),
+         clean = str_squish(clean)
+         ) %>% 
+  select(clean) %>% 
+  filter(clean != "")
+
+# Now we need to separate the names from the text
+all <- 
+  all %>% 
+  separate(clean, into = c("name", "text"), sep = ": ", extra = "merge")
+
+# Now we need to clean the names
+# We only need Gillard or Abbott
+only_gillard_and_abbott <- 
+  all %>% 
+  mutate(is_gillard_or_abbott = str_detect(string = name, pattern = "GILLARD|ABBOTT")) %>% 
+  filter(is_gillard_or_abbott == TRUE)
+
+names <- all$name %>% count()
+
+
+rm()

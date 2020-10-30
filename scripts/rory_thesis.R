@@ -1,8 +1,12 @@
 #### Preamble ####
 # Purpose: To download, prepare, and clean data from Hansard
 # Author: Rohan Alexander
-# Date: 28 October 2020
+# Date: 30 October 2020
 # Contact: rohan.alexander@utoronto.ca
+# Outstandings:
+# - Go through the csv and look for dumb mistakes easily fixed.
+# - Update code to get rid of those horrible long replacements.
+# - Change code order so that it flows nicely.
 
 
 #### Workspace set up ####
@@ -77,7 +81,8 @@ go_parse_em <- function(file_to_input, location_to_save_to){
 all_xml_files <- list.files(path = "inputs/data",
                             full.names = TRUE)
 
-# just try the later ones
+# There is a change in the way the files are stored, so this function - go_parse_em 
+# only works for the later ones.
 all_xml_files <- all_xml_files[35:67]
 
 # Make a list of savenames
@@ -432,11 +437,340 @@ go_fix_the_names <- function(location_to_read_and_save_to){
 walk(location_to_save_to, go_fix_the_names)
 
 
+#### Go back and deal with the earlier ones with the other formatting ####
+
+
+
+
+#### Get the earlier ones working ####
+
+all_xml_files <- list.files(path = "inputs/data",
+                            full.names = TRUE)
+
+# There is a change in the way the files are stored, so this function - go_parse_em 
+# only works for the later ones.
+all_xml_files <- all_xml_files[1:34]
+
+#### Prepare the data ####
+# For every file we want to read it in, parse it into a tibble and then save that tibble.
+go_parse_em <- function(file_to_input, location_to_save_to){
+  full_hansard <- read_html(file_to_input, encoding = "UTF-8")
+
+  # We want to get rid of some nodes that we don't need
+  # Based on https://stackoverflow.com/questions/50768364/how-to-filter-out-nodes-with-rvest
+  debateinfo_nodes <- full_hansard %>% html_nodes("debateinfo")
+  electorate <- full_hansard %>% html_nodes("electorate")
+  first_speech <- full_hansard %>% html_nodes("first\\.speech")
+  in_gov <- full_hansard %>% html_nodes("in\\.gov")
+  metadata <- full_hansard %>% html_nodes(xpath = '//*[@role="metadata"]')
+  pageno_nodes <- full_hansard %>% html_nodes("page\\.no")
+  party <- full_hansard %>% html_nodes("party")
+  spanclasshpsdebate_nodes <- full_hansard %>% html_nodes(".HPS-Debate")
+  subdebateinfo_nodes <- full_hansard %>% html_nodes("subdebateinfo")
+  subdebatetext_nodes <- full_hansard %>% html_nodes("subdebate\\.text")
+  time_stampe <- full_hansard %>% html_nodes("time\\.stamp")
+  
+  xml_remove(debateinfo_nodes)
+  xml_remove(electorate)
+  xml_remove(first_speech)
+  xml_remove(in_gov)
+  xml_remove(metadata)
+  xml_remove(pageno_nodes)
+  xml_remove(party)
+  xml_remove(spanclasshpsdebate_nodes)
+  xml_remove(subdebateinfo_nodes)
+  xml_remove(subdebatetext_nodes)
+  xml_remove(time_stampe)
+  
+  rm(debateinfo_nodes, electorate, first_speech, in_gov, metadata, pageno_nodes, party, spanclasshpsdebate_nodes, subdebateinfo_nodes, subdebatetext_nodes, time_stampe)
+  
+  # Convert to tibble and save
+  raw_data <- tibble(all = full_hansard %>% html_text()) 
+  
+  write_csv(raw_data, location_to_save_to)
+  
+  # Print to the console so the user knows what's happening
+  message <- paste0("Done with ", file_to_input, " at ", Sys.time())
+  print(message)
+}
+
+# Make a list of savenames
+csv_save_locations <- str_replace(all_xml_files, "inputs", "outputs")
+csv_save_locations <- str_replace(csv_save_locations, ".html", ".csv")
+
+# Apply the function to each
+# Will take a few minutes, but just local so doesn't matter.
+walk2(all_xml_files, csv_save_locations, go_parse_em)
+
+
+# Need a list of the uniqueIDs that were in parliament at that time
+aphIDs <- AustralianPoliticians::uniqueID_to_aphID
+house <- AustralianPoliticians::by_division_mps
+
+house <- house %>% 
+  left_join(aphIDs)
+
+rm(aphIDs)
+
+house <- 
+  house %>% 
+  filter(mpFrom < "2011-05-10" | is.na(mpFrom)) %>% 
+  filter(mpTo > "2010-05-10" | is.na(mpTo))
+
+the_ids <- paste(house$aphID, collapse = " | ")
+
+
+#### Clean the data ####
+# We want a CSV where one column is a uniqueID and then another column is the text
+# For every file we want to split the observations every time we identify a line break
+go_clean_em <- function(csv_save_locations, location_to_save_to){
+  the_days_data <- read_csv(csv_save_locations)
+  
+  the_days_data <- 
+    the_days_data %>% 
+    mutate(all = str_replace_all(all, "EZ5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "BV5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "R36", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M3M", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HK5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "230886", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "JT4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "LL6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M3C", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "ET4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVM", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "1K6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DZP", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "SE4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83P", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DZS", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DZS", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVW", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "IYU", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "MT4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "30540", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "230531", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83S", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DYW", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWK", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "008K0", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWC", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HW9", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HW7", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "IPZ", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "230485", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AN0", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWL", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AN1", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWM", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "YW6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWN", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DT4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M3K", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "WF6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVN", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "8IS", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWG", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AKI", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DZW", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "5K6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DZU", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83V", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "7K6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMO", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "8T4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "8T4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "LS4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "8K6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "L6B", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "NV5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "FKL", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "9K6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HV4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "AK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DZY", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "JH5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HM5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83X", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83L", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "8W5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMP", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "VU5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "220370", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "84T", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "84T", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWD", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83N", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMM", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWO", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "8H4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "ECV", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "ECV", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83O", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMV", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "91219", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HYM", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83Z", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AN2", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HH4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "DYN", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMX", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "96430", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "A9B", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HX4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E0J", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HRI", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "99931", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "RH4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMR", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E0H", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "BU8", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMN", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83A", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M38", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "WN6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "PG6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWP", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E07", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E07", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWQ", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M2V", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83B", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "JK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "219646", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "BP4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "5I4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "4T4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMU", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M3E", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E3L", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "4V5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83D", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83D", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "B36", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVO", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "KV5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "IYS", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AN3", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "139441", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "LKU", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "140651", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E09", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWR", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "A8W", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVP", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83M", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "217266", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "QI4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "9V5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVQ", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWS", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "PK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVR", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83E", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWA", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "FU4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWT", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "159771", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83K", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M2X", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83T", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "0J4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVY", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "83Q", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "YT4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "848", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00ATG", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "849", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWE", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "0V5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "5V5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00APG", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "172770", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "IJ4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "ZT4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "TK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "EM6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVS", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "2V5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HW8", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "YU5", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "210911", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "UK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVZ", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVU", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "GT4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "SJ4", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M2Y", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "885", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HVV", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "VK6", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "00AMT", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "188315", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E0D", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "84F", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "C2T", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "009LP", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "E0F", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "M3A", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "HWB", "HAHAHAHAHAHAHA")) %>%
+    mutate(all = str_replace_all(all, "10000", "HAHAHAHAHAHAHA"))
+  
+  
+  the_days_data <- 
+    the_days_data %>% 
+    separate_rows(all, sep = "HAHAHAHAHAHAHA")
+
+  
+  write_csv(the_days_data, location_to_save_to)
+  
+  # Print to the console so the user knows what's happening
+  message <- paste0("Done with ", location_to_save_to, " at ", Sys.time())
+  print(message)
+  
+}
+
+location_to_save_to <- str_replace(csv_save_locations, "data/", "cleaned/")
+
+# Apply the function to each
+# Will take a few minutes, but just local so doesn't matter.
+walk2(csv_save_locations, location_to_save_to, go_clean_em)
+
+
+# Now we need to separate the names from the text
+go_fix_the_names <- function(location_to_read_and_save_to){
+  the_days_data <- read_csv(location_to_read_and_save_to)
+  
+  
+  # Now we need to separate the names from the text
+  the_days_data <- 
+    the_days_data %>% 
+    separate(all, into = c("name", "text"), sep = "—", extra = "merge", fill = "left")
+  
+  write_csv(the_days_data, location_to_read_and_save_to)
+  
+  # Print to the console so the user knows what's happening
+  message <- paste0("Done with ", location_to_read_and_save_to, " at ", Sys.time())
+  print(message)
+  
+}
+
+walk(location_to_save_to, go_fix_the_names)
+
+
+
+
 #### End matter ####
 # It may be useful to have everything in one dataframe
 # This will be quite slow if you have a lot of days, but will be fine for a year or two
 
-all_data <- map_dfr(location_to_save_to, read_csv)
+all_csv_files <- list.files(path = "outputs/cleaned",
+                            full.names = TRUE)
+
+
+all_data <- map_dfr(all_csv_files, read_csv)
 
 head(all_data)
 
@@ -464,12 +798,8 @@ write_csv(all_data, "have_a_look.csv")
 
 
 
+#### Debris ####
 
-
-
-
-
-#### Get the earlier ones working ####
 
 # hansard <- read_html("https://parlinfo.aph.gov.au/parlInfo/download/chamber/hansardr/17ce9e95-ddb6-408d-8d19-954ef4b886b1/toc_unixml/House%20of%20Representatives_2011_05_31_70_Official.xml;fileType=text%2Fxml")
 
@@ -509,6 +839,8 @@ rm(debateinfo_nodes, electorate, first_speech, in_gov, metadata, pageno_nodes, p
 # Convert to tibble and save
 raw_data <- tibble(all = hansard %>% html_text()) 
 
+
+
 # Need a list of the uniqueIDs that were in parliament at that time
 aphIDs <- AustralianPoliticians::uniqueID_to_aphID
 house <- AustralianPoliticians::by_division_mps
@@ -524,6 +856,7 @@ house <-
   filter(mpTo > "2010-05-10" | is.na(mpTo))
 
 the_ids <- paste(house$aphID, collapse = " | ")
+
 
 adsfraw_data <- 
   raw_data %>% 
@@ -722,7 +1055,6 @@ adsfraw_data <-
   adsfraw_data %>% 
   separate_rows(all, sep = "HAHAHAHAHAHAHA")
   
-
 
 # Now we need to separate the names from the text
 adsfraw_data <- 
